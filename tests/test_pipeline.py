@@ -173,8 +173,8 @@ class TestProfiler:
         count = tf.Variable(tf.zeros([n_num], tf.int64))
         mean = tf.Variable(tf.zeros([n_num], tf.float64))
         M2 = tf.Variable(tf.zeros([n_num], tf.float64))
-        min_v = tf.Variable(tf.fill([n_num], 1e38))
-        max_v = tf.Variable(tf.fill([n_num], -1e38))
+        min_v = tf.Variable(tf.cast(tf.fill([n_num], 1e38), tf.float64))
+        max_v = tf.Variable(tf.cast(tf.fill([n_num], -1e38), tf.float64))
 
         b1 = tf.constant([[v] for v in values[:3]], dtype=tf.float64)
         b2 = tf.constant([[v] for v in values[3:]], dtype=tf.float64)

@@ -10,6 +10,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from backend.models.profile import DataProfile, FeatureStat
 from backend.pipeline.profiler import profile_dataset
+from backend.pipeline.ingest import build_dataset
+from backend.pipeline.store import save_dataset, DATA_DIR
 
 router = APIRouter()
 
@@ -74,12 +76,24 @@ async def profile_stream(dataset_id: str) -> EventSourceResponse:
         yield _progress("preprocessing", 20)
         await asyncio.sleep(0)
 
+        def _run_profile():
+            dataset_dir = DATA_DIR / dataset_id
+            raw = dataset_dir / "raw.csv"
+            spec = dataset_dir / "spec.json"
+            if not raw.exists():
+                raise FileNotFoundError()
+            
+            schema = json.loads(spec.read_text())
+            ds = build_dataset(str(raw), schema)
+            save_dataset(ds, dataset_dir)
+            return profile_dataset(dataset_id)
+
         loop = asyncio.get_event_loop()
         try:
             profile: DataProfile = await loop.run_in_executor(
-                None, profile_dataset, dataset_id
+                None, _run_profile
             )
-        except FileNotFoundError:
+        except getattr(__builtins__, 'FileNotFoundError', FileNotFoundError):
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_id!r} not found")
 
         yield _progress("stats", 70)

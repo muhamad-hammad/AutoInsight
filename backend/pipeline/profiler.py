@@ -20,11 +20,12 @@ _HLL_BITS = 64 - _HLL_P  # 52 bits for rho computation
 
 def _mix64(x: tf.Tensor) -> tf.Tensor:
     """MurmurHash3 uint64 finalizer — maps integers to uniform bit patterns."""
-    x = x ^ (x >> tf.constant(33, tf.uint64))
+    shift = tf.constant(33, tf.uint64)
+    x = tf.bitwise.bitwise_xor(x, tf.bitwise.right_shift(x, shift))
     x = x * _MIX_C1
-    x = x ^ (x >> tf.constant(33, tf.uint64))
+    x = tf.bitwise.bitwise_xor(x, tf.bitwise.right_shift(x, shift))
     x = x * _MIX_C2
-    x = x ^ (x >> tf.constant(33, tf.uint64))
+    x = tf.bitwise.bitwise_xor(x, tf.bitwise.right_shift(x, shift))
     return x
 
 
@@ -50,7 +51,7 @@ def _hll_update(registers: tf.Variable, values: tf.Tensor) -> None:
     """Update HLL registers for a batch of int64 categorical values."""
     hashed = _mix64(tf.cast(values, tf.uint64))
     bucket = tf.cast(
-        hashed >> tf.constant(_HLL_BITS, tf.uint64), tf.int32
+        tf.bitwise.right_shift(hashed, tf.constant(_HLL_BITS, tf.uint64)), tf.int32
     )  # [B]
     rho_vals = _rho(hashed)  # [B]
     new_regs = tf.tensor_scatter_nd_max(
@@ -132,8 +133,8 @@ def profile_dataset(dataset_id: str) -> DataProfile:
     wf_count = tf.Variable(tf.zeros([n_num], tf.int64))
     wf_mean = tf.Variable(tf.zeros([n_num], tf.float64))
     wf_M2 = tf.Variable(tf.zeros([n_num], tf.float64))
-    wf_min = tf.Variable(tf.fill([n_num], 1e38))
-    wf_max = tf.Variable(tf.fill([n_num], -1e38))
+    wf_min = tf.Variable(tf.cast(tf.fill([n_num], 1e38), tf.float64))
+    wf_max = tf.Variable(tf.cast(tf.fill([n_num], -1e38), tf.float64))
     nan_count_num = tf.Variable(tf.zeros([n_num], tf.int64))
 
     # ── Pearson running sums ─────────────────────────────────────────────────
@@ -143,7 +144,7 @@ def profile_dataset(dataset_id: str) -> DataProfile:
 
     # ── HLL registers [n_cat, _HLL_M] ────────────────────────────────────────
     hll_regs = [tf.Variable(tf.zeros([_HLL_M], tf.int32)) for _ in cat_feats]
-    nan_count_cat = tf.Variable(tf.zeros([n_cat], tf.int64))
+    nan_count_cat = [tf.Variable(0, dtype=tf.int64) for _ in cat_feats]
 
     row_count = 0
 
