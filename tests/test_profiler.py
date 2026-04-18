@@ -58,8 +58,8 @@ def test_welford_accuracy():
     count = tf.Variable(tf.zeros([n_num], tf.int64))
     mean = tf.Variable(tf.zeros([n_num], tf.float64))
     M2 = tf.Variable(tf.zeros([n_num], tf.float64))
-    min_v = tf.Variable(tf.fill([n_num], 1e38))
-    max_v = tf.Variable(tf.fill([n_num], -1e38))
+    min_v = tf.Variable(tf.cast(tf.fill([n_num], 1e38), tf.float64))
+    max_v = tf.Variable(tf.cast(tf.fill([n_num], -1e38), tf.float64))
 
     # Feed in two batches to also test the Chan merge path
     batch1 = tf.constant([[v] for v in values[:3]], dtype=tf.float64)
@@ -85,8 +85,8 @@ def test_welford_min_max():
     count = tf.Variable(tf.zeros([n_num], tf.int64))
     mean = tf.Variable(tf.zeros([n_num], tf.float64))
     M2 = tf.Variable(tf.zeros([n_num], tf.float64))
-    min_v = tf.Variable(tf.fill([n_num], 1e38))
-    max_v = tf.Variable(tf.fill([n_num], -1e38))
+    min_v = tf.Variable(tf.cast(tf.fill([n_num], 1e38), tf.float64))
+    max_v = tf.Variable(tf.cast(tf.fill([n_num], -1e38), tf.float64))
 
     batch = tf.constant([[v] for v in values], dtype=tf.float64)
     _welford_merge_batch(count, mean, M2, min_v, max_v, batch)

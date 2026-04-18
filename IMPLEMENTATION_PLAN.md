@@ -201,14 +201,21 @@ Build:
 
 **Scope:** Next.js Analysis Workspace UI wired to backend.
 **Deliverables:**
-- `frontend/hooks/useProfile.ts` — EventSource client, exposes `{progress, profile, status, error}`.
-- `frontend/app/workspace/page.tsx` — layout: `UploadDropzone | ProgressBar | DataGrid | ProfileCharts | RoadmapCard`.
-- Components: `UploadDropzone`, `ProgressBar`, `DataGrid`, `ProfileCharts`, `RoadmapCard`.
+- `frontend/hooks/useProfile.ts` — EventSource client, exposes `{progress, profile, status, error}`. ✅
+- `frontend/app/workspace/page.tsx` — layout: `UploadDropzone | ProgressBar | DataGrid | ProfileCharts | RoadmapCard`. ✅
+- Components: `UploadDropzone`, `ProgressBar`, `DataGrid`, `ProfileCharts`, `RoadmapCard`. ✅
 - `backend/api/routes_preview.py` — `GET /api/preview/{id}` returns first 200 rows (streamed from tf.data, decoded).
+- `frontend/app/page.tsx` — redirect root `/` to `/workspace` so the app is immediately accessible. ❌ (currently shows default Next.js template)
+- `frontend/lib/types.ts` — `FeatureStat`, `DataProfile`, `ModelRoadmap` shared types. ✅
 
 **Acceptance:**
+- Visiting `http://localhost:3000` lands on the workspace (not the Next.js default page).
 - Upload → progress bar animates through all 5 stages → DataGrid + charts + RoadmapCard render.
 - Null cells highlighted amber; keras snippet copy button works.
+
+**Remaining work:**
+1. Replace `frontend/app/page.tsx` with a redirect to `/workspace` (one line: `redirect('/workspace')`).
+2. Verify `ProfileCharts` and `DataGrid` components render without errors once a real dataset is uploaded.
 
 **Prompt:**
 ```

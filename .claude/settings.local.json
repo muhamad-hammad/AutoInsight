@@ -7,7 +7,11 @@
       "Bash(npx create-next-app@latest frontend --typescript --tailwind --app --no-eslint --no-src-dir --import-alias \"@/*\" --yes)",
       "Bash(npm install *)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('version','?'\\), d.get\\('description',''\\)\\)\")",
-      "Bash(node -e \"const r = require\\('/d/AutoInsight/frontend/node_modules/recharts'\\); console.log\\(Object.keys\\(r\\).filter\\(k => ['BarChart','Bar','XAxis','YAxis','CartesianGrid','Tooltip','ResponsiveContainer','Cell'].includes\\(k\\)\\)\\)\")"
+      "Bash(node -e \"const r = require\\('/d/AutoInsight/frontend/node_modules/recharts'\\); console.log\\(Object.keys\\(r\\).filter\\(k => ['BarChart','Bar','XAxis','YAxis','CartesianGrid','Tooltip','ResponsiveContainer','Cell'].includes\\(k\\)\\)\\)\")",
+      "Bash(uvicorn backend.main:app *)",
+      "Bash(python main.py)",
+      "Bash(python -m uvicorn backend.main:app --reload --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)"
     ]
   }
 }
