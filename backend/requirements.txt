@@ -1,0 +1,7 @@
+tensorflow>=2.18
+fastapi
+uvicorn[standard]
+python-multipart
+openai
+pydantic>=2
+sse-starlette
