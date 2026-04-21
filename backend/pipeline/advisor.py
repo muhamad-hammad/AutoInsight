@@ -256,11 +256,11 @@ def recommend(feature_map: FeatureMap, row_count: int = 10_000) -> list[ModelRoa
 async def enrich_with_openai(
     roadmaps: list[ModelRoadmap], feature_map: FeatureMap
 ) -> list[ModelRoadmap]:
-    """Replace roadmaps[0].rationale and keras_snippet with OpenAI output."""
+    """Replace roadmaps[0].rationale and keras_snippet with Ollama output."""
     if not roadmaps:
         return roadmaps
     try:
-        from openai import AsyncOpenAI
+        import httpx
 
         numeric = [n for n, i in feature_map.items() if i["role"] == "numeric"]
         cats = [n for n, i in feature_map.items() if i["role"] == "categorical"]
@@ -281,17 +281,26 @@ async def enrich_with_openai(
             '  "keras_snippet": a self-contained tf.keras code snippet (no markdown fences).'
         )
 
-        client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        resp = await client.chat.completions.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            messages=[
-                {"role": "system", "content": "You are a TensorFlow model architect."},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=512,
-            response_format={"type": "json_object"},
-        )
-        data = json.loads(resp.choices[0].message.content)
+        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        model = os.environ.get("OLLAMA_MODEL", "llama3")
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{ollama_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "You are a TensorFlow model architect. Always respond with valid JSON only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "stream": False,
+                    "format": "json",
+                },
+            )
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
+
+        data = json.loads(content)
         enriched = top.model_copy(update={
             "rationale": data.get("rationale", top.rationale),
             "keras_snippet": data.get("keras_snippet", top.keras_snippet),
