@@ -132,18 +132,22 @@ def test_enrich_updates_top_roadmap():
     fm = _fm(["a", "b"], [], "y", target_type="regression")
     roadmaps = recommend(fm, row_count=10_000)
 
-    enriched_rationale = "OpenAI says this architecture is great."
+    enriched_rationale = "Ollama says this architecture is great."
     enriched_snippet = "model = tf.keras.Sequential([tf.keras.layers.Dense(1)])"
 
-    fake_resp = MagicMock()
-    fake_resp.choices[0].message.content = json.dumps(
-        {"rationale": enriched_rationale, "keras_snippet": enriched_snippet}
-    )
+    fake_http_resp = MagicMock()
+    fake_http_resp.json.return_value = {
+        "message": {"content": json.dumps({"rationale": enriched_rationale, "keras_snippet": enriched_snippet})}
+    }
+    fake_http_resp.raise_for_status = MagicMock()
 
     mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(return_value=fake_resp)
+    mock_client.post = AsyncMock(return_value=fake_http_resp)
+    mock_async_ctx = MagicMock()
+    mock_async_ctx.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_async_ctx.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("openai.AsyncOpenAI", return_value=mock_client):
+    with patch("httpx.AsyncClient", return_value=mock_async_ctx):
         result = asyncio.run(enrich_with_openai(roadmaps, fm))
 
     assert result[0].rationale == enriched_rationale
@@ -157,7 +161,11 @@ def test_enrich_falls_back_on_error():
     roadmaps = recommend(fm, row_count=10_000)
     original_rationale = roadmaps[0].rationale
 
-    with patch("openai.AsyncOpenAI", side_effect=Exception("API down")):
+    mock_async_ctx = MagicMock()
+    mock_async_ctx.__aenter__ = AsyncMock(side_effect=Exception("Ollama down"))
+    mock_async_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=mock_async_ctx):
         result = asyncio.run(enrich_with_openai(roadmaps, fm))
 
     assert result[0].rationale == original_rationale

@@ -3,5 +3,9 @@ fastapi
 uvicorn[standard]
 python-multipart
 openai
+pandas
 pydantic>=2
 sse-starlette
+aiohttp
+httpx
+python-dotenv
