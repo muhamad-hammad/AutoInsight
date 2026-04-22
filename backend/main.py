@@ -4,6 +4,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.routes_llm import router as llm_router
 from backend.api.routes_preview import router as preview_router
 from backend.api.routes_profile import router as profile_router
 from backend.api.routes_recommend import router as recommend_router
@@ -23,6 +24,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(preview_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
 app.include_router(recommend_router, prefix="/api")
+app.include_router(llm_router, prefix="/api")
 
 
 @app.get("/health")

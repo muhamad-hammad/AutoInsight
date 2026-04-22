@@ -253,12 +253,112 @@ def recommend(feature_map: FeatureMap, row_count: int = 10_000) -> list[ModelRoa
     return [rm.model_copy(update={"rank": i + 1}) for i, rm in enumerate(unique)]
 
 
+_LLM_PROVIDERS: dict[str, dict] = {
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "key_env": "OPENAI_API_KEY",
+        "model_env": "OPENAI_MODEL",
+        "default_model": "gpt-4o-mini",
+    },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "model_env": "OPENROUTER_MODEL",
+        "default_model": "meta-llama/llama-3.3-8b-instruct:free",
+    },
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env": "GEMINI_API_KEY",
+        "model_env": "GEMINI_MODEL",
+        "default_model": "gemini-2.0-flash",
+    },
+    "grok": {
+        "base_url": "https://api.x.ai/v1",
+        "key_env": "XAI_API_KEY",
+        "model_env": "GROK_MODEL",
+        "default_model": "grok-3-mini",
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "model_env": "GROQ_MODEL",
+        "default_model": "llama-3.3-70b-versatile",
+    },
+}
+
+
+# Runtime override — set by routes_llm; takes precedence over env vars
+_runtime_provider: str | None = None
+
+
+def set_runtime_provider(name: str | None) -> None:
+    global _runtime_provider
+    _runtime_provider = name.lower() if name else None
+
+
+def get_llm_status() -> dict:
+    """Return current provider info and all available providers."""
+    available = []
+    for name, cfg in _LLM_PROVIDERS.items():
+        key = os.environ.get(cfg["key_env"], "")
+        model = os.environ.get(cfg["model_env"], cfg["default_model"])
+        available.append({
+            "name": name,
+            "model": model,
+            "configured": bool(key),
+        })
+
+    active_name = _runtime_provider or os.environ.get("LLM_PROVIDER", "").lower()
+    if not active_name:
+        # Auto-detect
+        for name, cfg in _LLM_PROVIDERS.items():
+            if os.environ.get(cfg["key_env"], ""):
+                active_name = name
+                break
+
+    active_cfg = _LLM_PROVIDERS.get(active_name, {}) if active_name else {}
+    active_model = (
+        os.environ.get(active_cfg.get("model_env", ""), active_cfg.get("default_model", ""))
+        if active_cfg else ""
+    )
+
+    return {
+        "active_provider": active_name or None,
+        "active_model": active_model or None,
+        "providers": available,
+    }
+
+
+def _resolve_provider() -> tuple[str, str, str] | None:
+    """Return (base_url, api_key, model) using runtime override first, then env vars."""
+    provider_name = _runtime_provider or os.environ.get("LLM_PROVIDER", "").lower()
+    if provider_name:
+        cfg = _LLM_PROVIDERS.get(provider_name)
+        if cfg:
+            key = os.environ.get(cfg["key_env"], "")
+            if key:
+                model = os.environ.get(cfg["model_env"], cfg["default_model"])
+                return cfg["base_url"], key, model
+        return None
+    # Auto-detect: use first provider whose key is set
+    for cfg in _LLM_PROVIDERS.values():
+        key = os.environ.get(cfg["key_env"], "")
+        if key:
+            model = os.environ.get(cfg["model_env"], cfg["default_model"])
+            return cfg["base_url"], key, model
+    return None
+
+
 async def enrich_with_openai(
     roadmaps: list[ModelRoadmap], feature_map: FeatureMap
 ) -> list[ModelRoadmap]:
-    """Replace roadmaps[0].rationale and keras_snippet with Ollama output."""
+    """Enrich roadmaps[0] rationale and keras_snippet using the configured LLM provider."""
     if not roadmaps:
         return roadmaps
+    provider = _resolve_provider()
+    if not provider:
+        return roadmaps
+    base_url, api_key, model = provider
     try:
         import httpx
 
@@ -281,24 +381,21 @@ async def enrich_with_openai(
             '  "keras_snippet": a self-contained tf.keras code snippet (no markdown fences).'
         )
 
-        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        model = os.environ.get("OLLAMA_MODEL", "llama3")
-
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
-                f"{ollama_url}/api/chat",
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": model,
                     "messages": [
                         {"role": "system", "content": "You are a TensorFlow model architect. Always respond with valid JSON only."},
                         {"role": "user", "content": prompt},
                     ],
-                    "stream": False,
-                    "format": "json",
+                    "response_format": {"type": "json_object"},
                 },
             )
             resp.raise_for_status()
-            content = resp.json()["message"]["content"]
+            content = resp.json()["choices"][0]["message"]["content"]
 
         data = json.loads(content)
         enriched = top.model_copy(update={

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from backend.models.schema import DataSchema
 
 DATA_DIR = Path("data")
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ async def upload_file(file: UploadFile) -> DataSchema:
 
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="File exceeds 100 MB limit")
+        raise HTTPException(status_code=413, detail="File exceeds 500 MB limit")
 
     dataset_id = str(uuid.uuid4())
     dataset_dir = DATA_DIR / dataset_id
