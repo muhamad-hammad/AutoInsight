@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import random
 from pathlib import Path
 
 import tensorflow as tf
@@ -18,15 +19,13 @@ def get_preview(dataset_id: str) -> list[dict]:
     if not raw_csv.exists():
         raise HTTPException(status_code=404, detail=f"Dataset {dataset_id!r} not found")
 
-    # Read header separately so we know column names
     lines_ds = tf.data.TextLineDataset(str(raw_csv))
     header_tensor = next(iter(lines_ds.take(1)))
     columns = [c.strip() for c in header_tensor.numpy().decode("utf-8").split(",")]
 
-    rows: list[dict] = []
-    for line_tensor in lines_ds.skip(1).take(200):
+    all_rows: list[dict] = []
+    for line_tensor in lines_ds.skip(1):
         raw_line = line_tensor.numpy().decode("utf-8")
-        # Use csv.reader to handle quoted fields correctly
         values = next(csv.reader(io.StringIO(raw_line)))
         row: dict = {}
         for col, val in zip(columns, values):
@@ -41,6 +40,6 @@ def get_preview(dataset_id: str) -> list[dict]:
                         row[col] = float(v)
                     except ValueError:
                         row[col] = v
-        rows.append(row)
+        all_rows.append(row)
 
-    return rows
+    return random.sample(all_rows, min(6, len(all_rows)))
