@@ -13,7 +13,7 @@ from backend.models.profile import DataProfile
 from backend.models.roadmap import ModelRoadmap
 from backend.pipeline.advisor import FeatureMap, inspect_spec, recommend
 from backend.pipeline.ingest import build_dataset
-from backend.pipeline.profiler import _welford_merge_batch, profile_dataset
+from backend.pipeline.profiler import profile_dataset
 from backend.pipeline.store import save_dataset
 
 # ── shared schemas ────────────────────────────────────────────────────────────
@@ -103,55 +103,58 @@ class TestIngest:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PROFILER
+# PROFILER (pandas-based)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _write_csv(path, fieldnames, rows):
+    with open(path, "w", newline="") as fh:
+        writer = _csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _setup_dataset(base_dir, dataset_id, fieldnames, rows):
+    dataset_dir = base_dir / dataset_id
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    _write_csv(dataset_dir / "raw.csv", fieldnames, rows)
+    return dataset_dir
+
+
 class TestProfiler:
-    def test_single_pass_over_dataset(self):
-        """profile_dataset must iterate the stored dataset exactly once."""
-        pass_count = [0]
+    def test_profile_returns_correct_structure(self, tmp_path):
+        """profile_dataset must return a DataProfile with correct row_count."""
+        rows = [{"x": float(i), "y": float(i * 2)} for i in range(50)]
+        _setup_dataset(tmp_path, "struct", ["x", "y"], rows)
 
-        def _counting_ds():
-            def _gen():
-                pass_count[0] += 1
-                for v in [1.0, 2.0, 3.0, 4.0, 5.0]:
-                    yield {"x": tf.constant(v, dtype=tf.float32)}
+        with patch("backend.pipeline.profiler.DATA_DIR", tmp_path):
+            profile = profile_dataset("struct")
 
-            return tf.data.Dataset.from_generator(
-                _gen,
-                output_signature={"x": tf.TensorSpec([], tf.float32)},
-            )
+        assert isinstance(profile, DataProfile)
+        assert profile.dataset_id == "struct"
+        assert profile.row_count == 50
+        assert profile.feature_count == 2
 
-        with patch(
-            "backend.pipeline.profiler.load_dataset",
-            return_value=_counting_ds(),
-        ):
-            profile_dataset("fake-id")
+    def test_mean_variance_vs_numpy(self, small_csv, tmp_path):
+        """Profiler mean/variance must match numpy within tolerance 1e-4."""
+        import pandas as pd
 
-        assert pass_count[0] == 1, (
-            f"Expected exactly 1 pass over the dataset, got {pass_count[0]}"
-        )
-
-    def test_welford_mean_variance_vs_numpy(self, small_csv, tmp_path, monkeypatch):
-        """Welford mean/variance stored in the profile must match numpy on the same
-        (already-normalized) dataset values, within tolerance 1e-4."""
-        monkeypatch.setattr(store_module, "DATA_DIR", tmp_path)
-
+        # Set up a dataset from the small_csv fixture
         dataset_id = "wf-accuracy"
-        ds = build_dataset(str(small_csv), _MIXED_SCHEMA)
-        save_dataset(ds, tmp_path / dataset_id)
+        dataset_dir = tmp_path / dataset_id
+        dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        # Collect the actual normalized values that the profiler will see
-        loaded = store_module.load_dataset(dataset_id)
-        age_vals: list[float] = []
-        for batch in loaded.batch(256):
-            age_vals.extend(batch["age"].numpy().tolist())
+        # Copy the fixture CSV to raw.csv
+        import shutil
+        shutil.copy(str(small_csv), str(dataset_dir / "raw.csv"))
 
-        expected_mean = float(np.mean(age_vals))
-        n = len(age_vals)
-        expected_var = float(np.sum((np.array(age_vals) - expected_mean) ** 2) / (n - 1))
+        # Compute expected values from pandas
+        df = pd.read_csv(small_csv)
+        expected_mean = float(df["age"].mean())
+        expected_var = float(df["age"].var())  # ddof=1 by default
 
-        profile = profile_dataset(dataset_id)
+        with patch("backend.pipeline.profiler.DATA_DIR", tmp_path):
+            profile = profile_dataset(dataset_id)
+
         age_stat = next(f for f in profile.features if f.name == "age")
 
         assert age_stat.mean is not None
@@ -162,31 +165,6 @@ class TestProfiler:
         assert abs(age_stat.variance - expected_var) < 1e-4, (
             f"variance: expected {expected_var:.6f}, got {age_stat.variance:.6f}"
         )
-
-    def test_welford_accumulator_direct(self):
-        """_welford_merge_batch mean/variance must match hand-computed values."""
-        values = [1.0, 2.0, 3.0, 4.0, 5.0]
-        # sample variance = sum((x-3)²)/(5-1) = 10/4 = 2.5
-        expected_mean, expected_var = 3.0, 2.5
-
-        n_num = 1
-        count = tf.Variable(tf.zeros([n_num], tf.int64))
-        mean = tf.Variable(tf.zeros([n_num], tf.float64))
-        M2 = tf.Variable(tf.zeros([n_num], tf.float64))
-        min_v = tf.Variable(tf.cast(tf.fill([n_num], 1e38), tf.float64))
-        max_v = tf.Variable(tf.cast(tf.fill([n_num], -1e38), tf.float64))
-
-        b1 = tf.constant([[v] for v in values[:3]], dtype=tf.float64)
-        b2 = tf.constant([[v] for v in values[3:]], dtype=tf.float64)
-        _welford_merge_batch(count, mean, M2, min_v, max_v, b1)
-        _welford_merge_batch(count, mean, M2, min_v, max_v, b2)
-
-        n = int(count[0].numpy())
-        computed_mean = float(mean[0].numpy())
-        computed_var = float(M2[0].numpy()) / (n - 1)
-
-        assert abs(computed_mean - expected_mean) < 1e-9
-        assert abs(computed_var - expected_var) < 1e-9
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -259,21 +237,26 @@ def test_advisor_rule6_high_correlation_note():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# INTEGRATION — CSV → build → profile → recommend
+# INTEGRATION — CSV → profile → recommend
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestIntegration:
     def test_full_pipeline_field_types(self, small_csv, tmp_path, monkeypatch):
-        """CSV path → build dataset → profile → recommend returns correct model types.
+        """CSV path → profile → build dataset → recommend returns correct model types.
         OpenAI is mocked so the test runs offline."""
         monkeypatch.setattr(store_module, "DATA_DIR", tmp_path)
 
         dataset_id = "integration-run"
-        ds = build_dataset(str(small_csv), _MIXED_SCHEMA)
-        save_dataset(ds, tmp_path / dataset_id)
+        dataset_dir = tmp_path / dataset_id
+        dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        # Profile step
-        profile = profile_dataset(dataset_id)
+        # Copy fixture CSV as raw.csv
+        import shutil
+        shutil.copy(str(small_csv), str(dataset_dir / "raw.csv"))
+
+        # Profile step (pandas-based, reads raw.csv)
+        with patch("backend.pipeline.profiler.DATA_DIR", tmp_path):
+            profile = profile_dataset(dataset_id)
 
         assert isinstance(profile, DataProfile)
         assert profile.dataset_id == dataset_id
@@ -287,6 +270,10 @@ class TestIntegration:
             assert stat.mean is not None
             assert stat.variance is not None
             assert stat.variance >= 0.0
+
+        # Build TF dataset and save for the recommend step
+        ds = build_dataset(str(small_csv), _MIXED_SCHEMA)
+        save_dataset(ds, tmp_path / dataset_id)
 
         # Recommend step
         loaded = store_module.load_dataset(dataset_id)
@@ -312,17 +299,20 @@ class TestIntegration:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestMemory:
-    def test_peak_memory_under_512mb(self, fixture_50mb_csv, tmp_path, monkeypatch):
+    def test_peak_memory_under_512mb(self, fixture_50mb_csv, tmp_path):
         """Peak Python-tracked memory during profiling a ~50 MB CSV must stay under 512 MB."""
-        monkeypatch.setattr(store_module, "DATA_DIR", tmp_path)
-
         dataset_id = "mem-test"
-        ds = build_dataset(str(fixture_50mb_csv), _BIG_SCHEMA)
-        save_dataset(ds, tmp_path / dataset_id)
+        dataset_dir = tmp_path / dataset_id
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy fixture CSV to raw.csv
+        import shutil
+        shutil.copy(str(fixture_50mb_csv), str(dataset_dir / "raw.csv"))
 
         tracemalloc.start()
         try:
-            profile_dataset(dataset_id)
+            with patch("backend.pipeline.profiler.DATA_DIR", tmp_path):
+                profile_dataset(dataset_id)
             _, peak = tracemalloc.get_traced_memory()
         finally:
             tracemalloc.stop()
