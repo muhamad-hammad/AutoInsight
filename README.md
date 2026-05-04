@@ -2,7 +2,7 @@
 
 An AutoML platform that takes a raw CSV, profiles it with a single streaming pass, and recommends ranked TensorFlow model architectures — all without leaving your browser.
 
-**Stack:** Python 3.11 · TensorFlow ≥ 2.18 · FastAPI · Pydantic v2 · Next.js 14 (App Router) · Recharts · Playwright
+**Stack:** Python 3.11 · TensorFlow ≥ 2.18 · FastAPI · Pydantic v2 · Next.js 14 (App Router) · Recharts · Playwright · OpenAI / Anthropic (runtime-switchable)
 
 ---
 
@@ -21,7 +21,7 @@ tests/             pytest unit/integration + Playwright E2E
 - Pandas used **only once** — schema sniff on upload (`nrows=0`). All downstream processing is `tf.data`.
 - No NumPy / SciKit-Learn / SciPy in pipeline code. Stats via `tf.linalg` / `tf.math` (Welford, HLL, Pearson).
 - TFRecord-on-disk persistence; FastAPI workers are stateless.
-- OpenAI calls isolated to `advisor.py` and the narrative helper in `routes_profile.py`.
+- LLM provider is runtime-switchable (OpenAI ↔ Anthropic) via `POST /api/llm/provider`; calls isolated to `advisor.py` and `routes_profile.py`.
 
 ---
 
@@ -30,10 +30,12 @@ tests/             pytest unit/integration + Playwright E2E
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Liveness check |
-| `POST` | `/api/upload` | Upload CSV (≤ 100 MB) → `{dataset_id, schema}` |
+| `POST` | `/api/upload` | Upload CSV (≤ 500 MB) → `{dataset_id, schema}` |
 | `GET` | `/api/preview/{id}` | First 200 rows decoded to `list[dict]` |
 | `GET` | `/api/profile/{id}` | SSE stream → 5 stages → `DataProfile` + narrative |
 | `POST` | `/api/recommend` | `{dataset_id, target_col}` → top-3 `ModelRoadmap[]` |
+| `GET` | `/api/llm/status` | Active LLM provider + model info |
+| `POST` | `/api/llm/provider` | `{provider}` — switch between `"openai"` / `"anthropic"` / `null` (env default) |
 
 SSE stages: `loading(5%) → preprocessing(20%) → stats(70%) → llm_insight(95%) → done(100%)`
 
@@ -45,7 +47,8 @@ SSE stages: `loading(5%) → preprocessing(20%) → stats(70%) → llm_insight(9
 
 ```bash
 cp .env.example .env
-# fill in OPENAI_API_KEY and DATA_DIR
+# fill in OPENAI_API_KEY, ANTHROPIC_API_KEY, and DATA_DIR
+# LLM_PROVIDER=openai|anthropic  (default: openai)
 ```
 
 ### 2. Backend
