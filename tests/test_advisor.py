@@ -137,7 +137,7 @@ def test_enrich_updates_top_roadmap():
 
     fake_http_resp = MagicMock()
     fake_http_resp.json.return_value = {
-        "message": {"content": json.dumps({"rationale": enriched_rationale, "keras_snippet": enriched_snippet})}
+        "choices": [{"message": {"content": json.dumps({"rationale": enriched_rationale, "keras_snippet": enriched_snippet})}}]
     }
     fake_http_resp.raise_for_status = MagicMock()
 
@@ -147,7 +147,8 @@ def test_enrich_updates_top_roadmap():
     mock_async_ctx.__aenter__ = AsyncMock(return_value=mock_client)
     mock_async_ctx.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("httpx.AsyncClient", return_value=mock_async_ctx):
+    with patch("backend.pipeline.advisor._resolve_provider", return_value=("https://fake.api/v1", "fake-key", "fake-model")), \
+         patch("httpx.AsyncClient", return_value=mock_async_ctx):
         result = asyncio.run(enrich_with_openai(roadmaps, fm))
 
     assert result[0].rationale == enriched_rationale
