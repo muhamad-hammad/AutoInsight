@@ -398,9 +398,17 @@ async def enrich_with_openai(
             content = resp.json()["choices"][0]["message"]["content"]
 
         data = json.loads(content)
+        rationale = data.get("rationale", top.rationale)
+        snippet = data.get("keras_snippet", top.keras_snippet)
+        if isinstance(snippet, list):
+            snippet = "\n".join(str(line) for line in snippet)
+        elif not isinstance(snippet, str):
+            snippet = top.keras_snippet
+        if not isinstance(rationale, str):
+            rationale = top.rationale
         enriched = top.model_copy(update={
-            "rationale": data.get("rationale", top.rationale),
-            "keras_snippet": data.get("keras_snippet", top.keras_snippet),
+            "rationale": rationale,
+            "keras_snippet": snippet,
         })
         return [enriched] + roadmaps[1:]
     except Exception:
