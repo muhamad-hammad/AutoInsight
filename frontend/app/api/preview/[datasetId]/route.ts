@@ -1,26 +1,33 @@
 import { type NextRequest } from "next/server";
-
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
+import { loadRawCSV } from "@/lib/dataset-store";
+import { parseCSV } from "@/lib/profiler";
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ datasetId: string }> }
 ) {
   const { datasetId } = await params;
+
   try {
-    const upstream = await fetch(`${BACKEND}/api/preview/${datasetId}`, {
-      cache: "no-store",
-      signal: req.signal,
-    });
-    const text = await upstream.text();
-    return new Response(text, {
-      status: upstream.status,
-      headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "application/json" },
-    });
-  } catch {
-    return new Response(JSON.stringify({ detail: "Backend unavailable." }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
+    const csvText = loadRawCSV(datasetId);
+    if (!csvText) {
+      return Response.json(
+        { detail: `Dataset ${datasetId} not found` },
+        { status: 404 }
+      );
+    }
+
+    const { rows } = parseCSV(csvText);
+
+    // Return 6 random rows (matching the Python backend behaviour)
+    const sampleSize = Math.min(6, rows.length);
+    const shuffled = [...rows].sort(() => Math.random() - 0.5);
+    const sample = shuffled.slice(0, sampleSize);
+
+    return Response.json(sample);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Preview failed";
+    return Response.json({ detail: message }, { status: 500 });
   }
 }
