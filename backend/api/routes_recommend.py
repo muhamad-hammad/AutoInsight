@@ -10,6 +10,7 @@ from backend.pipeline.advisor import (
     enrich_with_openai,
     inspect_spec,
     recommend,
+    LLM_PROVIDERS,
 )
 from backend.pipeline.store import DATA_DIR, load_dataset
 
@@ -19,6 +20,8 @@ router = APIRouter()
 class RecommendRequest(BaseModel):
     dataset_id: str
     target_col: str
+    llm_provider: str | None = None
+    llm_key: str | None = None
 
 
 def _ensure_tfrecord(dataset_id: str) -> None:
@@ -83,5 +86,16 @@ async def recommend_models(body: RecommendRequest) -> list[ModelRoadmap]:
     feature_map[body.target_col]["target_type"] = target_type
 
     roadmaps = recommend(feature_map, row_count=row_count)
-    roadmaps = await enrich_with_openai(roadmaps, feature_map)
+
+    config_override = None
+    if body.llm_provider and body.llm_key:
+        cfg = LLM_PROVIDERS.get(body.llm_provider.lower())
+        if cfg:
+            config_override = {
+                "base_url": cfg["base_url"],
+                "api_key": body.llm_key,
+                "model": cfg["default_model"],
+            }
+
+    roadmaps = await enrich_with_openai(roadmaps, feature_map, config_override=config_override)
     return roadmaps

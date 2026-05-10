@@ -14,8 +14,12 @@ from backend.pipeline.profiler import DATA_DIR, profile_dataset
 router = APIRouter()
 
 
-async def _generate_narrative(profile: DataProfile) -> str:
-    """Generate a plain-language summary using OpenAI (preferred) or Ollama."""
+async def _generate_narrative(
+    profile: DataProfile, 
+    llm_provider: str | None = None, 
+    llm_key: str | None = None
+) -> str:
+    """Generate a plain-language summary using configured LLM."""
     lines = []
     for f in profile.features:
         if f.dtype == "float32":
@@ -45,20 +49,51 @@ async def _generate_narrative(profile: DataProfile) -> str:
         "summarising data quality, notable distributions, and any correlation warnings."
     )
 
-    if os.environ.get("OPENAI_API_KEY"):
+    from backend.pipeline.advisor import LLM_PROVIDERS, enrich_with_openai
+    
+    config_override = None
+    if llm_provider and llm_key:
+        cfg = LLM_PROVIDERS.get(llm_provider.lower())
+        if cfg:
+            config_override = {
+                "base_url": cfg["base_url"],
+                "api_key": llm_key,
+                "model": cfg["default_model"],
+            }
+    
+    # Use enrich_with_openai's logic via a dummy roadmap if we want to reuse the helper,
+    # but it's better to just call the API here.
+    # For now, let's just use the config to call OpenAI-compatible API.
+    
+    base_url = "https://api.openai.com/v1"
+    api_key = os.environ.get("OPENAI_API_KEY")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+    if config_override:
+        base_url = config_override["base_url"]
+        api_key = config_override["api_key"]
+        model = config_override["model"]
+    
+    if api_key:
         try:
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI()
-            resp = await client.chat.completions.create(
-                model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.3,
-            )
-            return resp.choices[0].message.content.strip()
+            import httpx
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 300,
+                        "temperature": 0.3,
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception:
             pass
 
+    # Fallback to Ollama if no key provided
     try:
         import aiohttp
         ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -82,7 +117,11 @@ def _progress(stage: str, pct: int) -> dict:
 
 
 @router.get("/profile/{dataset_id}")
-async def profile_stream(dataset_id: str) -> EventSourceResponse:
+async def profile_stream(
+    dataset_id: str, 
+    llm_provider: str | None = None, 
+    llm_key: str | None = None
+) -> EventSourceResponse:
     async def _events() -> AsyncIterator[dict]:
         try:
             yield _progress("loading", 5)
@@ -102,7 +141,7 @@ async def profile_stream(dataset_id: str) -> EventSourceResponse:
             yield _progress("stats", 70)
             await asyncio.sleep(0)
 
-            narrative = await _generate_narrative(profile)
+            narrative = await _generate_narrative(profile, llm_provider, llm_key)
             profile = profile.model_copy(update={"narrative": narrative})
 
             yield _progress("llm_insight", 95)

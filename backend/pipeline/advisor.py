@@ -253,7 +253,7 @@ def recommend(feature_map: FeatureMap, row_count: int = 10_000) -> list[ModelRoa
     return [rm.model_copy(update={"rank": i + 1}) for i, rm in enumerate(unique)]
 
 
-_LLM_PROVIDERS: dict[str, dict] = {
+LLM_PROVIDERS: dict[str, dict] = {
     "openai": {
         "base_url": "https://api.openai.com/v1",
         "key_env": "OPENAI_API_KEY",
@@ -299,7 +299,7 @@ def set_runtime_provider(name: str | None) -> None:
 def get_llm_status() -> dict:
     """Return current provider info and all available providers."""
     available = []
-    for name, cfg in _LLM_PROVIDERS.items():
+    for name, cfg in LLM_PROVIDERS.items():
         key = os.environ.get(cfg["key_env"], "")
         model = os.environ.get(cfg["model_env"], cfg["default_model"])
         available.append({
@@ -311,12 +311,12 @@ def get_llm_status() -> dict:
     active_name = _runtime_provider or os.environ.get("LLM_PROVIDER", "").lower()
     if not active_name:
         # Auto-detect
-        for name, cfg in _LLM_PROVIDERS.items():
+        for name, cfg in LLM_PROVIDERS.items():
             if os.environ.get(cfg["key_env"], ""):
                 active_name = name
                 break
 
-    active_cfg = _LLM_PROVIDERS.get(active_name, {}) if active_name else {}
+    active_cfg = LLM_PROVIDERS.get(active_name, {}) if active_name else {}
     active_model = (
         os.environ.get(active_cfg.get("model_env", ""), active_cfg.get("default_model", ""))
         if active_cfg else ""
@@ -333,7 +333,7 @@ def _resolve_provider() -> tuple[str, str, str] | None:
     """Return (base_url, api_key, model) using runtime override first, then env vars."""
     provider_name = _runtime_provider or os.environ.get("LLM_PROVIDER", "").lower()
     if provider_name:
-        cfg = _LLM_PROVIDERS.get(provider_name)
+        cfg = LLM_PROVIDERS.get(provider_name)
         if cfg:
             key = os.environ.get(cfg["key_env"], "")
             if key:
@@ -341,7 +341,7 @@ def _resolve_provider() -> tuple[str, str, str] | None:
                 return cfg["base_url"], key, model
         return None
     # Auto-detect: use first provider whose key is set
-    for cfg in _LLM_PROVIDERS.values():
+    for cfg in LLM_PROVIDERS.values():
         key = os.environ.get(cfg["key_env"], "")
         if key:
             model = os.environ.get(cfg["model_env"], cfg["default_model"])
@@ -350,15 +350,26 @@ def _resolve_provider() -> tuple[str, str, str] | None:
 
 
 async def enrich_with_openai(
-    roadmaps: list[ModelRoadmap], feature_map: FeatureMap
+    roadmaps: list[ModelRoadmap],
+    feature_map: FeatureMap,
+    config_override: dict[str, str] | None = None,
 ) -> list[ModelRoadmap]:
     """Enrich roadmaps[0] rationale and keras_snippet using the configured LLM provider."""
     if not roadmaps:
         return roadmaps
-    provider = _resolve_provider()
-    if not provider:
+
+    if config_override and config_override.get("api_key"):
+        base_url = config_override.get("base_url")
+        api_key = config_override.get("api_key")
+        model = config_override.get("model")
+    else:
+        provider = _resolve_provider()
+        if not provider:
+            return roadmaps
+        base_url, api_key, model = provider
+
+    if not base_url or not api_key or not model:
         return roadmaps
-    base_url, api_key, model = provider
     try:
         import httpx
 
