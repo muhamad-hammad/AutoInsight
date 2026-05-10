@@ -1,0 +1,256 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ──────────────────────────────────────────────────────────── */
+:root {
+  --bg:             #F5F5F3;
+  --bg-nav:         rgba(245,245,243,0.88);
+  --surface:        #FFFFFF;
+  --surface-raised: #F0F0EE;
+  --surface-2:      #F0F0EE;
+  --surface-hover:  #EAEAE7;
+  --border:         #E2E1DC;
+  --border-strong:  #C8C8C5;
+  --border-subtle:  #EBEBE8;
+  --text-primary:   #1A1A18;
+  --text-secondary: #555553;
+  --text-muted:     #78776F;
+  --text-faint:     #BFBDB7;
+  --accent:         oklch(0.48 0.22 178);
+  --accent-dark:    oklch(0.42 0.22 178);
+  --accent-soft:    oklch(0.96 0.04 178);
+  --success:        #0F9B6E;
+  --success-soft:   #EDFAF5;
+  --warning:        #C07A00;
+  --warning-soft:   #FEF3C7;
+  --danger:         #C93333;
+  --danger-soft:    #FFF1F2;
+  --code-bg:        #1C1C1E;
+  --code-surface:   #1E2128;
+  --code-text:      #E5E5EA;
+  --toggle-track:   #E2E1DC;
+  --toggle-thumb:   #FFFFFF;
+  --shadow-sm:      0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:      0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:      0 12px 32px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.04);
+  --font-mono: 'DM Mono', monospace;
+  --font-sans: 'DM Sans', sans-serif;
+  --font-code: 'Fira Code', monospace;
+}
+
+.dark {
+  --bg:             #0E0E0D;
+  --bg-nav:         rgba(14,14,13,0.9);
+  --surface:        #181817;
+  --surface-raised: #212120;
+  --surface-2:      #212120;
+  --surface-hover:  #2A2A28;
+  --border:         #2C2C2A;
+  --border-strong:  #3C3C3A;
+  --border-subtle:  #222220;
+  --text-primary:   #F0F0EE;
+  --text-secondary: #A8A8A5;
+  --text-muted:     #767470;
+  --text-faint:     #3A3A37;
+  --accent:         oklch(0.60 0.22 178);
+  --accent-dark:    oklch(0.67 0.22 178);
+  --accent-soft:    oklch(0.18 0.08 178);
+  --success:        #1CB87E;
+  --success-soft:   #0D2620;
+  --warning:        #E09A20;
+  --warning-soft:   #261C04;
+  --danger:         #E05252;
+  --danger-soft:    #260E0E;
+  --code-bg:        #111110;
+  --code-surface:   #141619;
+  --code-text:      #E5E5EA;
+  --toggle-track:   #363633;
+  --toggle-thumb:   #EEECEA;
+  --shadow-sm:      0 1px 3px rgba(0,0,0,.25), 0 1px 2px rgba(0,0,0,.15);
+  --shadow-md:      0 4px 12px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.20);
+  --shadow-lg:      0 12px 32px rgba(0,0,0,.45), 0 4px 8px rgba(0,0,0,.20);
+}
+
+/* ─── Tailwind v4 Design Token Bridge ───────────────────────────────────────── */
+@theme inline {
+  --color-bg:             var(--bg);
+  --color-surface:        var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover:  var(--surface-hover);
+  --color-border:         var(--border);
+  --color-border-subtle:  var(--border-subtle);
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted:     var(--text-muted);
+  --color-text-faint:     var(--text-faint);
+  --color-accent:         var(--accent);
+  --color-accent-soft:    var(--accent-soft);
+  --color-success:        var(--success);
+  --color-success-soft:   var(--success-soft);
+  --color-warning:        var(--warning);
+  --color-warning-soft:   var(--warning-soft);
+  --color-danger:         var(--danger);
+  --color-danger-soft:    var(--danger-soft);
+  --color-code-bg:        var(--code-bg);
+  --color-code-surface:   var(--code-surface);
+}
+
+/* ─── Theme Transition ───────────────────────────────────────────────────────── */
+.theme-transitioning * {
+  transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease !important;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+}
+
+html { height: 100%; }
+body { min-height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ─── Focus ──────────────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ─── Font Utilities ─────────────────────────────────────────────────────────── */
+.font-dm-mono  { font-family: var(--font-mono); }
+.font-dm-sans  { font-family: var(--font-sans); }
+.font-fira     { font-family: var(--font-code); }
+.tabular       { font-variant-numeric: tabular-nums; }
+
+/* ─── Entrance Animations ────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.fade-up-1 { animation: fadeUp 280ms ease-out 0ms   both; }
+.fade-up-2 { animation: fadeUp 280ms ease-out 60ms  both; }
+.fade-up-3 { animation: fadeUp 280ms ease-out 120ms both; }
+.fade-up-4 { animation: fadeUp 280ms ease-out 180ms both; }
+.fade-up-5 { animation: fadeUp 280ms ease-out 240ms both; }
+.fade-up-6 { animation: fadeUp 280ms ease-out 300ms both; }
+
+/* ─── Dropzone Animated Border ───────────────────────────────────────────────── */
+@keyframes dropzonePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0   color-mix(in srgb, var(--accent) 15%, transparent),
+                0 0 0 0   color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent),
+                0 0 0 8px color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+}
+
+.dropzone-active {
+  animation: dropzonePulse 1.8s ease-in-out infinite;
+}
+
+/* ─── Syntax Highlighting ────────────────────────────────────────────────────── */
+.token-keyword { color: #79B8FF; }
+.token-string  { color: #85E89D; }
+.token-number  { color: #FFAB70; }
+.token-comment { color: #6A737D; font-style: italic; }
+
+/* ─── Code Block ─────────────────────────────────────────────────────────────── */
+.code-block pre {
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 1.75;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Card Hover ─────────────────────────────────────────────────────────────── */
+.card-hover {
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* ─── Stepper ────────────────────────────────────────────────────────────────── */
+.stepper-line {
+  height: 2px;
+  background: linear-gradient(90deg, var(--success) 0%, var(--border) 0%);
+  transition: background 400ms ease;
+}
+
+/* ─── Dynamic-width fills (driven by --w CSS custom property) ───────────────── */
+.fill-w { width: var(--w, 0%); }
+
+/* ─── Sidebar active indicator ───────────────────────────────────────────────── */
+.sidebar-item {
+  position: relative;
+  transition: background 120ms ease, color 120ms ease;
+}
+.sidebar-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.sidebar-item.active::before { opacity: 1; }
+
+/* ─── Tab navigation ─────────────────────────────────────────────────────────── */
+.tab-item {
+  position: relative;
+  transition: color 120ms ease;
+}
+.tab-item::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.tab-item.active::after { opacity: 1; }
+
+/* ─── Select option theme ────────────────────────────────────────────────────── */
+select option { background: var(--surface); color: var(--text-primary); }
+
+/* ─── Smooth all theme-sensitive elements ────────────────────────────────────── */
+@layer base {
+  * { transition-property: background-color, border-color, color; transition-duration: 0.2s; transition-timing-function: ease; }
+}
