@@ -5,6 +5,7 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "next": "16.2.4",
     "@playwright/test": "^1.49.0",
     "typescript": "^5"
   }
