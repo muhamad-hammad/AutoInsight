@@ -3,11 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import LLMConfigModal from "./LLMConfigModal";
 
 export default function Nav() {
   const [dark, setDark] = useState(true);
-  const [showLLMSettings, setShowLLMSettings] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const id   = searchParams.get("id");
@@ -102,7 +100,7 @@ export default function Nav() {
           </Link>
         )}
         <button
-          onClick={() => setShowLLMSettings(true)}
+          onClick={() => window.dispatchEvent(new CustomEvent("open-llm-settings"))}
           title="LLM Settings"
           className="w-[34px] h-[34px] rounded-lg flex items-center justify-center
                      text-text-muted hover:text-text-primary
@@ -117,9 +115,6 @@ export default function Nav() {
         </button>
         <ThemeToggle dark={dark} onToggle={toggle} />
       </div>
-      {showLLMSettings && (
-        <LLMConfigModal forceShow={true} onClose={() => setShowLLMSettings(false)} />
-      )}
     </nav>
   );
 }
