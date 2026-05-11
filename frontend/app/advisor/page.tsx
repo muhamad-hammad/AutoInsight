@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { ModelRoadmap } from "@/lib/types";
+import { getCachedCSV } from "@/lib/csv-cache";
 
 const STAGES = [
   "Profiling features",
@@ -188,15 +189,18 @@ function AdvisorPageInner() {
     const llmProvider = localStorage.getItem("ai-llm-provider");
     const llmKey = localStorage.getItem("ai-llm-key");
 
-    fetch("/api/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        dataset_id: id, 
-        target_col: target,
-        llm_provider: llmProvider,
-        llm_key: llmKey
-      }),
+    getCachedCSV(id).then(csvContent => {
+      return fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          dataset_id: id, 
+          target_col: target,
+          llm_provider: llmProvider,
+          llm_key: llmKey,
+          csv_content: csvContent || undefined
+        }),
+      });
     })
       .then((r) => { if (!r.ok) throw new Error(`Recommend failed (${r.status})`); return r.json(); })
       .then((data) => setRoadmaps(data))
