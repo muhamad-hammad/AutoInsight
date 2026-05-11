@@ -73,6 +73,18 @@ export default function UploadPage() {
       const res = await fetch("/api/upload", { method: "POST", body: form });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       const data = await res.json();
+      // Cache CSV in browser so subsequent API calls can re-send it
+      // (Vercel /tmp is not shared across serverless function containers)
+      try {
+        const text = await file.text();
+        sessionStorage.setItem(`csv-${data.dataset_id}`, text);
+        // Also persist in Cache API for larger files / cross-tab survival
+        const cache = await caches.open("autoinsight-datasets");
+        await cache.put(
+          `/dataset/${data.dataset_id}`,
+          new Response(text, { headers: { "Content-Type": "text/csv" } })
+        );
+      } catch { /* storage full — will still work on warm Vercel containers */ }
       router.push(`/workspace?id=${data.dataset_id}&name=${encodeURIComponent(file.name)}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Upload failed");
