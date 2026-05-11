@@ -70,7 +70,15 @@ export function useProfile(datasetId: string | null): UseProfileResult {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done || cancelled) break;
+          if (cancelled) break;
+          if (done) {
+            // If the stream ended but we never got 'done', it's likely a timeout
+            if (!profile && !error) {
+              setError("Profiling timed out or connection lost. Check your LLM settings.");
+              setStatus("error");
+            }
+            break;
+          }
 
           buffer += decoder.decode(value, { stream: true });
 
@@ -92,10 +100,12 @@ export function useProfile(datasetId: string | null): UseProfileResult {
                 } catch { /* ignore */ }
               } else if (currentEvent === "done") {
                 try {
-                  setProfile(JSON.parse(data) as DataProfile);
+                  const finalProfile = JSON.parse(data) as DataProfile;
+                  setProfile(finalProfile);
                   setStatus("done");
-                } catch {
-                  setError("Failed to parse profile data");
+                } catch (e) {
+                  console.error("Parse error:", e);
+                  setError("Failed to parse profile results. The dataset might be too large.");
                   setStatus("error");
                 }
                 return; // stream complete
