@@ -102,6 +102,25 @@ export function useProfile(datasetId: string | null): UseProfileResult {
                 try {
                   const finalProfile = JSON.parse(data) as DataProfile;
                   setProfile(finalProfile);
+
+                  // Phase 2: Get LLM narrative in a separate request to avoid Vercel timeouts
+                  setProgress({ stage: "llm_insight", pct: 95 });
+                  
+                  const narrativeRes = await fetch(`/api/profile/${datasetId}/narrative`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      profile: finalProfile,
+                      llm_provider: llmProvider || undefined,
+                      llm_key: llmKey || undefined,
+                    }),
+                  });
+
+                  if (narrativeRes.ok) {
+                    const { narrative } = await narrativeRes.json();
+                    setProfile(prev => prev ? { ...prev, narrative } : null);
+                  }
+                  
                   setStatus("done");
                 } catch (e) {
                   console.error("Parse error:", e);
