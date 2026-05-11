@@ -1,15 +1,29 @@
 import { type NextRequest } from "next/server";
-import { loadRawCSV } from "@/lib/dataset-store";
+import { loadRawCSV, saveRawCSV } from "@/lib/dataset-store";
 import { parseCSV } from "@/lib/profiler";
 
-export async function GET(
+/**
+ * POST so the client can include csv_content when /tmp is cold.
+ */
+export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ datasetId: string }> }
 ) {
   const { datasetId } = await params;
 
+  let csvContent: string | undefined;
   try {
-    const csvText = loadRawCSV(datasetId);
+    const body = await _req.json();
+    csvContent = body.csv_content;
+  } catch { /* empty body */ }
+
+  try {
+    let csvText = loadRawCSV(datasetId);
+    if (!csvText && csvContent) {
+      csvText = csvContent;
+      saveRawCSV(datasetId, csvText);
+    }
+
     if (!csvText) {
       return Response.json(
         { detail: `Dataset ${datasetId} not found` },

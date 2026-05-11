@@ -1,20 +1,31 @@
 import { type NextRequest } from "next/server";
-import { loadRawCSV } from "@/lib/dataset-store";
+import { loadRawCSV, saveRawCSV } from "@/lib/dataset-store";
 import { profileDataset, generateNarrative } from "@/lib/profiler";
 
 /**
  * SSE-streaming profile endpoint.
  *
- * Emits progress events followed by a final "done" event containing the
- * full DataProfile JSON — identical to the Python SSE implementation.
+ * Accepts POST with optional `csv_content` in the JSON body.  If the CSV
+ * is not found in /tmp (common on Vercel when a different function
+ * container handles this request), it falls back to the client-supplied
+ * content and re-saves it to /tmp for the duration of this invocation.
  */
-export async function GET(
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ datasetId: string }> }
 ) {
   const { datasetId } = await params;
-  const llmProvider = req.nextUrl.searchParams.get("llm_provider");
-  const llmKey = req.nextUrl.searchParams.get("llm_key");
+
+  let body: {
+    csv_content?: string;
+    llm_provider?: string;
+    llm_key?: string;
+  } = {};
+  try {
+    body = await req.json();
+  } catch {
+    // empty body is fine — we'll try /tmp
+  }
 
   const encoder = new TextEncoder();
 
@@ -28,7 +39,14 @@ export async function GET(
         // Stage 1 — loading
         send("progress", JSON.stringify({ stage: "loading", pct: 5 }));
 
-        const csvText = loadRawCSV(datasetId);
+        // Try /tmp first, fall back to client-supplied CSV
+        let csvText = loadRawCSV(datasetId);
+        if (!csvText && body.csv_content) {
+          csvText = body.csv_content;
+          // Re-save so preview / recommend on the same container can find it
+          saveRawCSV(datasetId, csvText);
+        }
+
         if (!csvText) {
           send(
             "failure",
@@ -49,8 +67,8 @@ export async function GET(
         // Stage 4 — LLM narrative
         const narrative = await generateNarrative(
           profile,
-          llmProvider,
-          llmKey
+          body.llm_provider,
+          body.llm_key
         );
         profile = { ...profile, narrative };
 
