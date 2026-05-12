@@ -78,6 +78,10 @@ npm run dev
 pytest tests/ -v
 
 # E2E (requires both servers running)
+# Install backend requirements before running E2E:
+#   cd backend && pip install -r requirements.txt
+# Install Playwright browsers (also run automatically on npm install via postinstall):
+#   npx playwright install --with-deps
 npx playwright test
 ```
 

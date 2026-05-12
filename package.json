@@ -2,10 +2,15 @@
   "name": "autoinsight",
   "private": true,
   "scripts": {
+    "dev": "concurrently \"uvicorn backend.main:app --reload\" \"npm --prefix frontend run dev\"",
+    "start-backend": "uvicorn backend.main:app --reload",
+    "start-frontend": "npm --prefix frontend run dev",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
-    "typescript": "^5"
-  }
+    "@playwright/test": "^1.59.1",
+    "typescript": "^5",
+    "concurrently": "^7.6.0"
+  },
+  "postinstall": "npx playwright install --with-deps"
 }
