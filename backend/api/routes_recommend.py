@@ -24,10 +24,9 @@ class RecommendRequest(BaseModel):
     llm_key: str | None = None
 
 
-def _ensure_tfrecord(dataset_id: str) -> None:
-    """Build TFRecord on first recommend call if profiling skipped it."""
+def _ensure_parquet(dataset_id: str) -> None:
     dataset_dir = DATA_DIR / dataset_id
-    if (dataset_dir / "dataset.tfrecord").exists():
+    if (dataset_dir / "dataset.parquet").exists():
         return
     spec_path = dataset_dir / "spec.json"
     if not spec_path.exists():
@@ -35,8 +34,8 @@ def _ensure_tfrecord(dataset_id: str) -> None:
     schema = json.loads(spec_path.read_text())
     from backend.pipeline.ingest import build_dataset
     from backend.pipeline.store import save_dataset
-    ds = build_dataset(str(dataset_dir / "raw.csv"), schema)
-    save_dataset(ds, dataset_dir)
+    df, feature_spec = build_dataset(str(dataset_dir / "raw.csv"), schema)
+    save_dataset(df, feature_spec, dataset_dir)
 
 
 @router.post("/recommend", response_model=list[ModelRoadmap])
@@ -48,37 +47,29 @@ async def recommend_models(body: RecommendRequest) -> list[ModelRoadmap]:
     import asyncio
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(None, _ensure_tfrecord, body.dataset_id)
+        await loop.run_in_executor(None, _ensure_parquet, body.dataset_id)
     except (FileNotFoundError, OSError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
     try:
-        ds = load_dataset(body.dataset_id)
+        df, feature_spec = load_dataset(body.dataset_id)
     except (FileNotFoundError, OSError):
         raise HTTPException(status_code=404, detail=f"Dataset {body.dataset_id!r} not found")
 
-    spec = ds.element_spec
-    if body.target_col not in spec:
+    if body.target_col not in feature_spec:
         raise HTTPException(
             status_code=422,
             detail=f"target_col {body.target_col!r} not found in dataset features",
         )
 
-    feature_map = inspect_spec(spec, body.target_col)
+    feature_map = inspect_spec(feature_spec, body.target_col)
+    row_count = len(df)
 
-    row_count = 0
-    for batch in ds.batch(4096):
-        first_val = next(iter(batch.values()))
-        row_count += int(first_val.shape[0])
-
-    target_dtype = spec[body.target_col].dtype.name
+    target_dtype = feature_spec[body.target_col]["dtype"]
     if "float" in target_dtype:
         target_type = "regression"
     else:
-        unique_vals: set = set()
-        for batch in ds.batch(4096).take(1):
-            for v in batch[body.target_col].numpy().flatten():
-                unique_vals.add(int(v))
+        unique_vals = set(df[body.target_col].dropna().astype(int).unique().tolist())
         target_type = "binary" if len(unique_vals) <= 2 else (
             "multiclass" if len(unique_vals) <= 20 else "regression"
         )

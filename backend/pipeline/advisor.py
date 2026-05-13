@@ -4,8 +4,6 @@ import json
 import os
 from typing import Literal
 
-import tensorflow as tf
-
 from backend.models.roadmap import ModelRoadmap
 
 FeatureRole = Literal["numeric", "categorical", "target"]
@@ -14,12 +12,10 @@ FeatureMap = dict[str, dict]
 # Each entry: {"role": FeatureRole, "dtype": str, "cardinality": int | None}
 
 
-def inspect_spec(
-    element_spec: dict[str, tf.TensorSpec], target_col: str
-) -> FeatureMap:
+def inspect_spec(feature_spec: dict[str, dict], target_col: str) -> FeatureMap:
     feature_map: FeatureMap = {}
-    for name, spec in element_spec.items():
-        dtype_name = spec.dtype.name
+    for name, info in feature_spec.items():
+        dtype_name = info["dtype"]
         if name == target_col:
             role: FeatureRole = "target"
         elif "float" in dtype_name or "int" in dtype_name:
@@ -28,41 +24,6 @@ def inspect_spec(
             role = "categorical"
         feature_map[name] = {"role": role, "dtype": dtype_name, "cardinality": None}
     return feature_map
-
-
-def _detect_target_type(
-    dataset_id: str, target_col: str, feature_map: FeatureMap
-) -> str:
-    target_dtype = feature_map.get(target_col, {}).get("dtype", "float32")
-    if "float" in target_dtype:
-        return "regression"
-
-    # Count unique values for integer targets (sample first 4096 rows)
-    from backend.pipeline.store import load_dataset
-
-    ds = load_dataset(dataset_id)
-    unique: set = set()
-    for batch in ds.batch(4096).take(1):
-        vals = batch.get(target_col)
-        if vals is not None:
-            for v in vals.numpy().flatten():
-                unique.add(int(v))
-    if len(unique) <= 2:
-        return "binary"
-    if len(unique) <= 20:
-        return "multiclass"
-    return "regression"
-
-
-def _count_rows(dataset_id: str) -> int:
-    from backend.pipeline.store import load_dataset
-
-    ds = load_dataset(dataset_id)
-    count = 0
-    for batch in ds.batch(4096):
-        first_val = next(iter(batch.values()))
-        count += int(first_val.shape[0])
-    return count
 
 
 def _has_high_cardinality_cats(feature_map: FeatureMap) -> bool:

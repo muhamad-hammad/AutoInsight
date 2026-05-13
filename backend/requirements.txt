@@ -1,9 +1,9 @@
-tensorflow>=2.18
 fastapi
 uvicorn[standard]
 python-multipart
 openai
 pandas
+pyarrow
 pydantic>=2
 sse-starlette
 aiohttp
