@@ -76,3 +76,12 @@ desktop.ini
 *.log
 *.tmp
 *.bak
+
+# Claude / AI agent files
+.claude/
+CLAUDE.md
+AGENTS.md
+frontend/CLAUDE.md
+frontend/AGENTS.md
+*.pdf
+AutoInsight.pdf
