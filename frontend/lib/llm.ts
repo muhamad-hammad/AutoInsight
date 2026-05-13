@@ -18,39 +18,31 @@ export const LLM_PROVIDERS: Record<string, LLMProviderConfig> = {
     base_url: "https://api.openai.com/v1",
     key_env: "OPENAI_API_KEY",
     model_env: "OPENAI_MODEL",
-    default_model: "gpt-4.1-mini",
+    default_model: "gpt-4o-mini",
   },
-
   openrouter: {
     base_url: "https://openrouter.ai/api/v1",
     key_env: "OPENROUTER_API_KEY",
     model_env: "OPENROUTER_MODEL",
-
-    // Avoid :free models on Vercel
-    default_model: "meta-llama/llama-3.1-8b-instruct",
+    default_model: "meta-llama/llama-3.3-8b-instruct:free",
   },
-
   gemini: {
     base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
     key_env: "GEMINI_API_KEY",
     model_env: "GEMINI_MODEL",
     default_model: "gemini-2.0-flash",
   },
-
   grok: {
     base_url: "https://api.x.ai/v1",
     key_env: "XAI_API_KEY",
     model_env: "GROK_MODEL",
     default_model: "grok-3-mini",
   },
-
   groq: {
     base_url: "https://api.groq.com/openai/v1",
     key_env: "GROQ_API_KEY",
     model_env: "GROQ_MODEL",
-
-    // Faster + more stable on Vercel
-    default_model: "llama-3.1-8b-instant",
+    default_model: "llama-3.3-70b-versatile",
   },
 };
 
@@ -80,19 +72,14 @@ export function getLLMStatus(): LLMStatus {
   const available = Object.entries(LLM_PROVIDERS).map(([name, cfg]) => {
     const key = process.env[cfg.key_env] ?? "";
     const model = process.env[cfg.model_env] ?? cfg.default_model;
-
-    return {
-      name,
-      model,
-      configured: Boolean(key),
-    };
+    return { name, model, configured: Boolean(key) };
   });
 
   let activeName =
     _runtimeProvider || (process.env.LLM_PROVIDER ?? "").toLowerCase();
 
-  // Auto-detect first configured provider
   if (!activeName) {
+    // Auto-detect: first provider with a key set
     for (const [name, cfg] of Object.entries(LLM_PROVIDERS)) {
       if (process.env[cfg.key_env]) {
         activeName = name;
@@ -101,10 +88,7 @@ export function getLLMStatus(): LLMStatus {
     }
   }
 
-  const activeCfg = activeName
-    ? LLM_PROVIDERS[activeName]
-    : undefined;
-
+  const activeCfg = activeName ? LLM_PROVIDERS[activeName] : undefined;
   const activeModel = activeCfg
     ? process.env[activeCfg.model_env] ?? activeCfg.default_model
     : null;
@@ -125,17 +109,15 @@ export interface ResolvedProvider {
 /**
  * Resolve which LLM provider to use.
  *
- * Priority:
- * explicit override → runtime provider → env → auto-detect
+ * Priority: explicit override → runtime provider → LLM_PROVIDER env → auto-detect.
  */
 export function resolveProvider(
   overrideProvider?: string | null,
   overrideKey?: string | null
 ): ResolvedProvider | null {
-  // Explicit provider override
+  // If the caller provides explicit provider + key, use those
   if (overrideProvider && overrideKey) {
     const cfg = LLM_PROVIDERS[overrideProvider.toLowerCase()];
-
     if (cfg) {
       return {
         base_url: cfg.base_url,
@@ -145,16 +127,13 @@ export function resolveProvider(
     }
   }
 
-  // Runtime or env provider
   const providerName =
     _runtimeProvider || (process.env.LLM_PROVIDER ?? "").toLowerCase();
 
   if (providerName) {
     const cfg = LLM_PROVIDERS[providerName];
-
     if (cfg) {
       const key = process.env[cfg.key_env] ?? "";
-
       if (key) {
         return {
           base_url: cfg.base_url,
@@ -163,14 +142,12 @@ export function resolveProvider(
         };
       }
     }
-
     return null;
   }
 
-  // Auto-detect first available provider
+  // Auto-detect: first provider whose key is set
   for (const cfg of Object.values(LLM_PROVIDERS)) {
     const key = process.env[cfg.key_env] ?? "";
-
     if (key) {
       return {
         base_url: cfg.base_url,
@@ -185,6 +162,7 @@ export function resolveProvider(
 
 /**
  * Call the configured LLM with a chat completion request.
+ * Returns the assistant message content, or null on failure.
  */
 export async function chatCompletion(
   messages: Array<{ role: string; content: string }>,
@@ -196,11 +174,7 @@ export async function chatCompletion(
   }
 ): Promise<string | null> {
   const provider = options?.provider ?? resolveProvider();
-
-  if (!provider) {
-    console.error("No LLM provider configured.");
-    return null;
-  }
+  if (!provider) return null;
 
   try {
     const body: Record<string, unknown> = {
@@ -209,94 +183,30 @@ export async function chatCompletion(
       max_tokens: options?.maxTokens ?? 300,
       temperature: options?.temperature ?? 0.3,
     };
-
     if (options?.jsonMode) {
-      body.response_format = {
-        type: "json_object",
-      };
+      body.response_format = { type: "json_object" };
     }
 
-    // Longer timeout for Vercel serverless
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, 90000);
-
-    console.log(
-      `[LLM] Requesting ${provider.model} from ${provider.base_url}`
-    );
-
-    const resp = await fetch(
-      `${provider.base_url}/chat/completions`,
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${provider.api_key}`,
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      }
-    );
+    const resp = await fetch(`${provider.base_url}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.api_key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
     clearTimeout(timeoutId);
 
-    if (!resp.ok) {
-      const errorText = await resp.text();
-
-      console.error("[LLM] HTTP Error:", resp.status);
-      console.error("[LLM] Response:", errorText);
-
-      return null;
-    }
-
-    // Safer parsing for debugging provider issues
-    const raw = await resp.text();
-
-    if (!raw) {
-      console.error("[LLM] Empty response body");
-      return null;
-    }
-
-    let data: any;
-
-    try {
-      data = JSON.parse(raw);
-    } catch (parseErr) {
-      console.error("[LLM] Failed to parse JSON");
-      console.error(raw);
-
-      return null;
-    }
-
-    const content =
-      data?.choices?.[0]?.message?.content?.trim() ?? null;
-
-    if (!content) {
-      console.error("[LLM] No content returned");
-      console.error(data);
-
-      return null;
-    }
-
-    return content;
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content?.trim() ?? null;
   } catch (err) {
-    if (err instanceof Error) {
-      console.error("[LLM] Error:", err.message);
-      console.error(err.stack);
-
-      if (err.name === "AbortError") {
-        console.error(
-          "[LLM] Request timed out after 90 seconds"
-        );
-      }
-    } else {
-      console.error("[LLM] Unknown error:", err);
-    }
-
+    console.error("LLM Error:", err);
     return null;
   }
 }
