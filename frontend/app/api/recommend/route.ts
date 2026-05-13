@@ -1,17 +1,16 @@
 import { type NextRequest } from "next/server";
-import { loadRawCSV, saveRawCSV } from "@/lib/dataset-store";
+import { loadRawCSV } from "@/lib/dataset-store";
 import { parseCSV } from "@/lib/profiler";
 import { buildFeatureMap, recommend, enrichWithLLM } from "@/lib/advisor";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { dataset_id, target_col, llm_provider, llm_key, csv_content } = body as {
+    const { dataset_id, target_col, llm_provider, llm_key } = body as {
       dataset_id: string;
       target_col: string;
       llm_provider?: string;
       llm_key?: string;
-      csv_content?: string;
     };
 
     if (!dataset_id || !target_col) {
@@ -21,12 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let csvText = loadRawCSV(dataset_id);
-    if (!csvText && csv_content) {
-      csvText = csv_content;
-      saveRawCSV(dataset_id, csvText);
-    }
-
+    const csvText = loadRawCSV(dataset_id);
     if (!csvText) {
       return Response.json(
         { detail: `Dataset '${dataset_id}' not found` },
