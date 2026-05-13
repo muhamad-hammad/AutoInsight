@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 
 const PROVIDERS = [
   { id: "openai", name: "OpenAI (GPT-4o mini)" },
@@ -16,10 +15,7 @@ export default function LLMConfigModal({ forceShow = false, onClose }: { forceSh
   const [provider, setProvider] = useState("openai");
   const [key, setKey] = useState("");
 
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
-    setMounted(true);
     const savedProvider = localStorage.getItem("ai-llm-provider");
     const savedKey = localStorage.getItem("ai-llm-key");
     
@@ -29,10 +25,6 @@ export default function LLMConfigModal({ forceShow = false, onClose }: { forceSh
     if (forceShow || !savedKey) {
       setIsOpen(true);
     }
-
-    const handleOpen = () => setIsOpen(true);
-    window.addEventListener("open-llm-settings", handleOpen);
-    return () => window.removeEventListener("open-llm-settings", handleOpen);
   }, [forceShow]);
 
   const handleSave = () => {
@@ -42,12 +34,12 @@ export default function LLMConfigModal({ forceShow = false, onClose }: { forceSh
     if (onClose) onClose();
   };
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen) return null;
 
-  const modalContent = (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-200">
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-[440px] bg-surface-raised border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
+        className="w-full max-w-[440px] bg-surface-raised border border-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -124,7 +116,4 @@ export default function LLMConfigModal({ forceShow = false, onClose }: { forceSh
       </div>
     </div>
   );
-
-  return createPortal(modalContent, document.body);
 }
-
