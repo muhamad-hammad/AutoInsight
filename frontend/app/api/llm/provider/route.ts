@@ -1,16 +1,24 @@
 import { type NextRequest } from "next/server";
-import { setRuntimeProvider, getLLMStatus } from "@/lib/llm";
+
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { provider } = body as { provider?: string | null };
-    setRuntimeProvider(provider ?? null);
-    return Response.json(getLLMStatus());
+    const upstream = await fetch(`${BACKEND}/api/llm/provider`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await upstream.text();
+    return new Response(text, {
+      status: upstream.status,
+      headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "application/json" },
+    });
   } catch {
-    return Response.json(
-      { detail: "Invalid request body" },
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ detail: "Backend unavailable." }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
