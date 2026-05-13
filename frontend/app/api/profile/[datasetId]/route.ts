@@ -63,12 +63,25 @@ export async function POST(
         send("progress", JSON.stringify({ stage: "stats", pct: 30 }));
         let profile = profileDataset(datasetId, csvText);
 
+        // Stage 4 — LLM narrative
+        send("progress", JSON.stringify({ stage: "llm_insight", pct: 75 }));
+        const narrative = await generateNarrative(
+          profile,
+          body.llm_provider,
+          body.llm_key
+        );
+        profile = { ...profile, narrative };
+
         // Final check: if profile is too large (Vercel limit 4.5MB), prune correlation matrix
+        // A rough estimate: 100 features = 10k pairs. 500 features = 250k pairs.
         if (profile.feature_count > 300) {
+          // Keep only high correlations or empty matrix to save space
           profile.correlation_matrix = {};
         }
 
-        // Done with base profiling
+        send("progress", JSON.stringify({ stage: "llm_insight", pct: 95 }));
+
+        // Done
         send("done", JSON.stringify(profile));
       } catch (err) {
         console.error("Profiling Error:", err);
