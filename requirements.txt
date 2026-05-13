@@ -1,1 +1,11 @@
--r backend/requirements.txt
+fastapi
+uvicorn[standard]
+python-multipart
+openai
+pandas
+pyarrow
+pydantic>=2
+sse-starlette
+aiohttp
+httpx
+python-dotenv
