@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import csv
-import io
 import random
 from pathlib import Path
 
-import tensorflow as tf
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -19,27 +17,6 @@ def get_preview(dataset_id: str) -> list[dict]:
     if not raw_csv.exists():
         raise HTTPException(status_code=404, detail=f"Dataset {dataset_id!r} not found")
 
-    lines_ds = tf.data.TextLineDataset(str(raw_csv))
-    header_tensor = next(iter(lines_ds.take(1)))
-    columns = [c.strip() for c in header_tensor.numpy().decode("utf-8").split(",")]
-
-    all_rows: list[dict] = []
-    for line_tensor in lines_ds.skip(1):
-        raw_line = line_tensor.numpy().decode("utf-8")
-        values = next(csv.reader(io.StringIO(raw_line)))
-        row: dict = {}
-        for col, val in zip(columns, values):
-            v = val.strip()
-            if v == "" or v.lower() in ("nan", "null", "none", "na", "n/a"):
-                row[col] = None
-            else:
-                try:
-                    row[col] = int(v)
-                except ValueError:
-                    try:
-                        row[col] = float(v)
-                    except ValueError:
-                        row[col] = v
-        all_rows.append(row)
-
-    return random.sample(all_rows, min(6, len(all_rows)))
+    df = pd.read_csv(raw_csv)
+    rows = df.where(pd.notna(df), None).to_dict(orient="records")
+    return random.sample(rows, min(6, len(rows)))
