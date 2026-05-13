@@ -77,8 +77,7 @@ async def _generate_narrative(
     if api_key:
         try:
             import httpx
-            timeout_seconds = float(os.environ.get("LLM_REQUEST_TIMEOUT", "10"))
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(
                     f"{base_url}/chat/completions",
                     headers={"Authorization": f"Bearer {api_key}"},
@@ -91,9 +90,6 @@ async def _generate_narrative(
                 )
                 resp.raise_for_status()
                 return resp.json()["choices"][0]["message"]["content"].strip()
-        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.WriteTimeout, httpx.TimeoutException):
-            # LLM timed out or connection lost — return a short explanatory string
-            return "(LLM timeout: try increasing server timeout or set LLM_REQUEST_TIMEOUT to a higher value)"
         except Exception:
             pass
 

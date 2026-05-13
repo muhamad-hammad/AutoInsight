@@ -392,9 +392,7 @@ async def enrich_with_openai(
             '  "keras_snippet": a self-contained tf.keras code snippet (no markdown fences).'
         )
 
-        # Respect platform limits via env var; default to a conservative 10s for serverless hosts
-        timeout_seconds = float(os.environ.get("LLM_REQUEST_TIMEOUT", "10"))
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
@@ -424,8 +422,5 @@ async def enrich_with_openai(
             "keras_snippet": snippet,
         })
         return [enriched] + roadmaps[1:]
-    except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.WriteTimeout, httpx.TimeoutException):
-        # LLM request timed out or connection lost — return original roadmaps (safe fallback)
-        return roadmaps
     except Exception:
         return roadmaps
