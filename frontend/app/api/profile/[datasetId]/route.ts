@@ -57,14 +57,14 @@ export async function POST(
         }
 
         // Stage 2 — preprocessing
-        send("progress", JSON.stringify({ stage: "preprocessing", pct: 15 }));
+        send("progress", JSON.stringify({ stage: "preprocessing", pct: 20 }));
 
         // Stage 3 — compute statistics
-        send("progress", JSON.stringify({ stage: "stats", pct: 30 }));
         let profile = profileDataset(datasetId, csvText);
 
+        send("progress", JSON.stringify({ stage: "stats", pct: 70 }));
+
         // Stage 4 — LLM narrative
-        send("progress", JSON.stringify({ stage: "llm_insight", pct: 75 }));
         const narrative = await generateNarrative(
           profile,
           body.llm_provider,
@@ -72,19 +72,11 @@ export async function POST(
         );
         profile = { ...profile, narrative };
 
-        // Final check: if profile is too large (Vercel limit 4.5MB), prune correlation matrix
-        // A rough estimate: 100 features = 10k pairs. 500 features = 250k pairs.
-        if (profile.feature_count > 300) {
-          // Keep only high correlations or empty matrix to save space
-          profile.correlation_matrix = {};
-        }
-
         send("progress", JSON.stringify({ stage: "llm_insight", pct: 95 }));
 
         // Done
         send("done", JSON.stringify(profile));
       } catch (err) {
-        console.error("Profiling Error:", err);
         const message =
           err instanceof Error ? err.message : "Profiling failed";
         send("failure", JSON.stringify({ message }));

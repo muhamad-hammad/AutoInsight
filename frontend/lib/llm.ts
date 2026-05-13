@@ -187,9 +187,6 @@ export async function chatCompletion(
       body.response_format = { type: "json_object" };
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
     const resp = await fetch(`${provider.base_url}/chat/completions`, {
       method: "POST",
       headers: {
@@ -197,16 +194,12 @@ export async function chatCompletion(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
     });
-
-    clearTimeout(timeoutId);
 
     if (!resp.ok) return null;
     const data = await resp.json();
     return data?.choices?.[0]?.message?.content?.trim() ?? null;
-  } catch (err) {
-    console.error("LLM Error:", err);
+  } catch {
     return null;
   }
 }
