@@ -125,26 +125,6 @@ function pearson(a: number[], b: number[]): number {
   return denom === 0 ? 0 : sumAB / denom;
 }
 
-/** Compute min of a numeric array. */
-function arrayMin(values: number[]): number | null {
-  if (values.length === 0) return null;
-  let m = values[0];
-  for (let i = 1; i < values.length; i++) {
-    if (values[i] < m) m = values[i];
-  }
-  return m;
-}
-
-/** Compute max of a numeric array. */
-function arrayMax(values: number[]): number | null {
-  if (values.length === 0) return null;
-  let m = values[0];
-  for (let i = 1; i < values.length; i++) {
-    if (values[i] > m) m = values[i];
-  }
-  return m;
-}
-
 /**
  * Profile a dataset from raw CSV text.
  *
@@ -168,7 +148,14 @@ export function profileDataset(
     }
   }
 
-  // Pre-extract numeric column values (for stats and correlation)
+  // Extract numeric column values (for correlation)
+  const numericValues: Record<string, number[]> = {};
+  for (const col of numericCols) {
+    numericValues[col] = [];
+  }
+
+  // We need aligned arrays for correlation — only rows where all numeric cols are non-null
+  // But for per-column stats we use all available values
   const perColValues: Record<string, number[]> = {};
   for (const col of numericCols) {
     perColValues[col] = [];
@@ -180,62 +167,47 @@ export function profileDataset(
     }
   }
 
-  // Correlation computation
+  // For correlation, use pairwise complete observations
   const corrDict: Record<string, Record<string, number>> = {};
   const highCorrMap: Record<string, string[]> = {};
   for (const col of numericCols) {
     highCorrMap[col] = [];
-    corrDict[col] = {};
   }
 
   if (numericCols.length >= 2) {
-    // Optimization: If dataset is very large, sample rows for correlation to avoid timeouts
-    // O(Cols^2 * Rows) can easily hit Vercel's 10s timeout.
-    const maxIterations = 5_000_000; // Total row-visits allowed
-    const numPairs = (numericCols.length * (numericCols.length - 1)) / 2;
-    const maxRowsForCorr = Math.floor(maxIterations / Math.max(numPairs, 1));
-    
-    let corrRows = rows;
-    if (rowCount > maxRowsForCorr && maxRowsForCorr > 100) {
-      // Simple stride sampling
-      const stride = Math.floor(rowCount / maxRowsForCorr);
-      corrRows = [];
-      for (let i = 0; i < rowCount; i += stride) {
-        corrRows.push(rows[i]);
-      }
-    }
-
-    for (let i = 0; i < numericCols.length; i++) {
-      const fi = numericCols[i];
-      corrDict[fi][fi] = 1.0;
-
-      for (let j = i + 1; j < numericCols.length; j++) {
-        const fj = numericCols[j];
-        
+    for (const fi of numericCols) {
+      const rowD: Record<string, number> = {};
+      for (const fj of numericCols) {
+        if (fi === fj) {
+          rowD[fj] = 1.0;
+          continue;
+        }
+        // Pairwise complete: only rows where both fi and fj are numeric
         const aVals: number[] = [];
         const bVals: number[] = [];
-        
-        for (const row of corrRows) {
+        for (const row of rows) {
           const a = row[fi];
           const b = row[fj];
-          if (typeof a === "number" && typeof b === "number") {
+          if (
+            a !== null &&
+            typeof a === "number" &&
+            !isNaN(a) &&
+            b !== null &&
+            typeof b === "number" &&
+            !isNaN(b)
+          ) {
             aVals.push(a);
             bVals.push(b);
           }
         }
-
         const r = pearson(aVals, bVals);
         const rounded = Math.round(r * 1e6) / 1e6;
-        const val = isNaN(rounded) ? 0 : rounded;
-        
-        corrDict[fi][fj] = val;
-        corrDict[fj][fi] = val;
-
-        if (Math.abs(val) > CORR_THRESHOLD) {
+        rowD[fj] = isNaN(rounded) ? 0 : rounded;
+        if (Math.abs(rounded) > CORR_THRESHOLD) {
           highCorrMap[fi].push(fj);
-          highCorrMap[fj].push(fi);
         }
       }
+      corrDict[fi] = rowD;
     }
   }
 
@@ -244,7 +216,10 @@ export function profileDataset(
 
   for (const col of numericCols) {
     const vals = perColValues[col];
-    const nullCount = rowCount - vals.length;
+    const nullCount = rows.filter((r) => {
+      const v = r[col];
+      return v === null || (typeof v === "number" && isNaN(v));
+    }).length;
     const nullPct =
       rowCount > 0
         ? Math.round((nullCount / rowCount) * 100 * 10000) / 10000
@@ -255,8 +230,8 @@ export function profileDataset(
       dtype: "float32",
       mean: vals.length > 0 ? mean(vals) : null,
       variance: vals.length > 1 ? variance(vals) : null,
-      min_val: arrayMin(vals),
-      max_val: arrayMax(vals),
+      min_val: vals.length > 0 ? Math.min(...vals) : null,
+      max_val: vals.length > 0 ? Math.max(...vals) : null,
       null_count: nullCount,
       null_pct: nullPct,
       cardinality: null,
@@ -265,26 +240,18 @@ export function profileDataset(
   }
 
   for (const col of catCols) {
-    // Count non-nulls and uniqueness in one pass
-    let nullCount = 0;
-    const unique = new Set<any>();
-    for (const row of rows) {
-      const v = row[col];
-      if (v === null) {
-        nullCount++;
-      } else {
-        unique.add(v);
-      }
-    }
-    
+    const nullCount = rows.filter((r) => r[col] === null).length;
     const nullPct =
       rowCount > 0
         ? Math.round((nullCount / rowCount) * 100 * 10000) / 10000
         : 0;
+    const unique = new Set(
+      rows.map((r) => r[col]).filter((v) => v !== null)
+    );
 
     features.push({
       name: col,
-      dtype: "string",
+      dtype: "int64",
       mean: null,
       variance: null,
       min_val: null,
@@ -318,10 +285,7 @@ export async function generateNarrative(
   const { chatCompletion, resolveProvider } = await import("./llm");
 
   const lines: string[] = [];
-  // Limit features in prompt to avoid token limits
-  const displayFeatures = profile.features.slice(0, 50);
-
-  for (const f of displayFeatures) {
+  for (const f of profile.features) {
     if (f.dtype === "float32" || f.dtype === "float64") {
       const parts = [`null_pct=${f.null_pct}%`];
       if (f.mean != null) {
@@ -340,19 +304,13 @@ export async function generateNarrative(
     }
   }
 
-  if (profile.features.length > 50) {
-    lines.push(`... and ${profile.features.length - 50} more columns.`);
-  }
-
   const highCorrPairs: string[] = [];
   for (const [a, row] of Object.entries(profile.correlation_matrix)) {
     for (const [b, r] of Object.entries(row)) {
       if (a < b && Math.abs(r) > 0.85) {
         highCorrPairs.push(`${a} ↔ ${b}`);
-        if (highCorrPairs.length > 10) break;
       }
     }
-    if (highCorrPairs.length > 10) break;
   }
 
   let prompt =
@@ -363,15 +321,12 @@ export async function generateNarrative(
   if (highCorrPairs.length > 0) {
     prompt +=
       "\nHighly correlated pairs (|r|>0.85): " + highCorrPairs.join(", ");
-    if (highCorrPairs.length > 10) prompt += " (truncated)";
   }
   prompt +=
     "\n\nWrite a short paragraph (3-5 sentences) for a data analyst " +
     "summarising data quality, notable distributions, and any correlation warnings.";
 
   const provider = resolveProvider(llmProvider, llmKey);
-  if (!provider) return "";
-
   const result = await chatCompletion(
     [{ role: "user", content: prompt }],
     { provider, maxTokens: 300, temperature: 0.3 }
@@ -379,4 +334,3 @@ export async function generateNarrative(
 
   return result ?? "";
 }
-
