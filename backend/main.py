@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,9 +14,14 @@ from backend.api.routes_upload import router as upload_router
 
 app = FastAPI(title="AutoInsight")
 
+_origins = ["http://localhost:3000"]
+_extra = os.getenv("CORS_ORIGINS", "")
+if _extra:
+    _origins.extend(o.strip() for o in _extra.split(",") if o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
