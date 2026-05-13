@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfile } from "@/hooks/useProfile";
-import { getCachedCSV } from "@/lib/csv-cache";
 import type { DataProfile, FeatureStat } from "@/lib/types";
 
 const NAV_ITEMS = [
@@ -460,13 +459,7 @@ function DataPreviewTable({
 
   useEffect(() => {
     setLoading(true);
-    getCachedCSV(datasetId).then(csvContent => {
-      return fetch(`/api/preview/${datasetId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv_content: csvContent || undefined })
-      });
-    })
+    fetch(`/api/preview/${datasetId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data) => setRows(data))
       .catch(() => setRows([]))
