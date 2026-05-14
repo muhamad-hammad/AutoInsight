@@ -4,6 +4,12 @@ An AutoML platform that takes a raw CSV, profiles it with a single streaming pas
 
 **Stack:** Python 3.11 · TensorFlow ≥ 2.18 · FastAPI · Pydantic v2 · Next.js 14 (App Router) · Recharts · Playwright · OpenAI / Anthropic (runtime-switchable)
 
+## Live Demo
+
+**[https://autoinsight-mh.vercel.app/](https://autoinsight-mh.vercel.app/)**
+
+> The live deployment serves the Next.js frontend. To use the full pipeline (upload, profile, recommend), you'll need the backend running locally and `NEXT_PUBLIC_API_URL` pointed at it.
+
 ---
 
 ## Architecture
