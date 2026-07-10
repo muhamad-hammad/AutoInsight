@@ -34,7 +34,7 @@ async def upload_file(file: UploadFile) -> DataSchema:
     try:
         df_empty = pd.read_csv(raw_path, nrows=0)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not parse CSV: {exc}") from exc
+        raise HTTPException(status_code=422, detail="Could not parse the uploaded file as CSV.") from exc
 
     schema = {col: str(dtype) for col, dtype in df_empty.dtypes.items()}
 
